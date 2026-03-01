@@ -1,28 +1,27 @@
 @echo off
-chcp 65001 >nul
 echo ===================================
-echo 推送前端修复到 GitHub
+echo Push all changes to GitHub
 echo ===================================
 echo.
 
 cd /d "%~dp0"
 
-echo 添加修改的文件...
+echo Add all changes...
 git add .
 
 echo.
-echo 提交更改...
-git commit -m "Fix: 移除未使用的导入"
+echo Commit changes...
+git commit -m "feat: add bilingual README and improve features"
 
 echo.
-echo 推送到 GitHub...
+echo Push to GitHub...
 git push origin main
 
 echo.
 echo ===================================
-echo 完成！
+echo Done!
 echo ===================================
 echo.
-echo Vercel 会自动重新构建...
+echo Visit: https://github.com/17qingxinflower/literature-analysis
 echo.
 pause

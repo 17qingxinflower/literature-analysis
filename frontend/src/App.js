@@ -43,17 +43,22 @@ const models = [
 ];
 
 function App() {
+  // 从 localStorage 读取配置
+  const savedApiKey = localStorage.getItem('literature_apiKey');
+  const savedBaseUrl = localStorage.getItem('literature_baseUrl');
+  
   const [literatureFile, setLiteratureFile] = useState(null);
   const [imageFile, setImageFile] = useState(null);
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState(null);
   const [error, setError] = useState(null);
   const [selectedModel, setSelectedModel] = useState('deepseek-v3.2');
-  const [apiKey, setApiKey] = useState('');
-  const [baseUrl, setBaseUrl] = useState('https://apis.iflow.cn/v1');
+  const [apiKey, setApiKey] = useState(savedApiKey || '');
+  const [baseUrl, setBaseUrl] = useState(savedBaseUrl || 'https://apis.iflow.cn/v1');
   const [settingsVisible, setSettingsVisible] = useState(false);
   const [literatureDragOver, setLiteratureDragOver] = useState(false);
   const [imageDragOver, setImageDragOver] = useState(false);
+  const [analysisComplete, setAnalysisComplete] = useState(false);
 
   const handleLiteratureFile = (file) => {
     if (file && (file.type === 'application/pdf' || file.type.startsWith('image/') || file.name.endsWith('.pdf') || file.name.endsWith('.docx') || file.name.endsWith('.txt'))) {
@@ -121,6 +126,7 @@ function App() {
         },
       });
       setResult(response.data);
+      setAnalysisComplete(true);
       message.success('分析成功');
     } catch (err) {
       setError(err.response?.data?.error || '分析失败，请重试');
@@ -129,6 +135,22 @@ function App() {
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleReset = () => {
+    setLiteratureFile(null);
+    setImageFile(null);
+    setResult(null);
+    setError(null);
+    setAnalysisComplete(false);
+    
+    // 清空 input 的 value
+    const literatureInput = document.getElementById('literature-upload');
+    const imageInput = document.getElementById('image-upload');
+    if (literatureInput) literatureInput.value = '';
+    if (imageInput) imageInput.value = '';
+    
+    message.success('已重置，可以继续上传新文件');
   };
 
   const handleDownload = () => {
@@ -354,15 +376,26 @@ function App() {
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.5, delay: 0.5 }}
         >
-          <Button 
-            type="primary" 
-            className="submit-button"
-            onClick={handleSubmit}
-            loading={loading}
-            disabled={!literatureFile}
-          >
-            {loading ? '分析中...' : '开始分析'}
-          </Button>
+          {analysisComplete ? (
+            <Button 
+              type="default" 
+              className="submit-button"
+              onClick={handleReset}
+              icon={<FileTextOutlined />}
+            >
+              再次上传
+            </Button>
+          ) : (
+            <Button 
+              type="primary" 
+              className="submit-button"
+              onClick={handleSubmit}
+              loading={loading}
+              disabled={!literatureFile}
+            >
+              {loading ? '分析中...' : '开始分析'}
+            </Button>
+          )}
         </motion.div>
       </motion.div>
       
@@ -451,6 +484,9 @@ function App() {
               message.error('请输入 Base URL');
               return;
             }
+            // 保存到 localStorage
+            localStorage.setItem('literature_apiKey', apiKey);
+            localStorage.setItem('literature_baseUrl', baseUrl);
             message.success('配置已保存');
             setSettingsVisible(false);
           }}>

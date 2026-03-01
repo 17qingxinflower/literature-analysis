@@ -507,103 +507,103 @@ ${this.currentImageInfo.map(img => `图片${img.id}（第${img.page}页，文件
     const conclusionStr = await this.callLLM(conclusionPrompt, actualContent);
     const conclusions = this.parseJSON(conclusionStr);
 
-    // 第四步：生成方法流程图提示词
+    // 第四步：生成方法流程图提示词（全英文）
     let methodPrompt = '';
     if (contentAnalysis.type === 'experimental' && contentAnalysis.content && contentAnalysis.content.methods) {
       const methodsToUse = pdfImageAnalysis ? 
-        `【实验方法描述】\n${contentAnalysis.content.methods}\n\n【PDF图片参考】\n${pdfImageAnalysis}` : 
+        `[Method Description]\n${contentAnalysis.content.methods}\n\n[PDF Image Reference]\n${pdfImageAnalysis}` : 
         contentAnalysis.content.methods;
         
-      const promptGenPrompt = `你是一个专业的科研图表设计师，擅长为顶级学术期刊（如IEEE、Nature、Science）设计方法流程图。
+      const promptGenPrompt = `You are a professional scientific diagram designer, specializing in designing method flowcharts for top-tier academic journals (such as IEEE, Nature, Science).
 
-请根据以下实验方法，生成一段**极其详细、专业、可直接用于AI图像生成**的提示词（Prompt）。
+Based on the experimental methods below, generate an **extremely detailed, professional, and directly usable prompt for AI image generation**.
 
-## 提示词生成要求：
+## Prompt Generation Requirements:
 
-### 1. 整体风格要求（参考顶级期刊标准）
-- **高分辨率**：适合学术出版的高质量图像（300 DPI以上）
-- **专业学术风格**：严格遵循IEEE/ACM/Nature/Science等顶级期刊的图表美学标准
-- **圆角矩形设计**：使用圆角矩形框表示各个阶段，具有现代感和专业感
-- **柔和粉彩色系**：
-  - 第一阶段：柔和蓝色（Soft Pastel Blue）
-  - 第二阶段：柔和橙色/黄色（Soft Pastel Orange/Yellow）
-  - 第三阶段：柔和绿色（Soft Pastel Green）
-  - 其他阶段：使用协调的粉彩色系
-- **宽高比适中**：16:9横向布局，不过于宽或过于窄，确保内容清晰可读
-- **渐变效果**：在色块内使用柔和的渐变效果，增加层次感
+### 1. Overall Style Requirements (Top-tier Journal Standards)
+- **High Resolution**: Publication-quality image (300 DPI or higher)
+- **Professional Academic Style**: Strictly follow IEEE/ACM/Nature/Science journal chart aesthetics
+- **Rounded Rectangle Design**: Use rounded rectangles for stages, modern and professional
+- **Soft Pastel Color Palette**:
+  - Stage 1: Soft Pastel Blue
+  - Stage 2: Soft Pastel Orange/Yellow
+  - Stage 3: Soft Pastel Green
+  - Other stages: Coordinated pastel colors
+- **Moderate Aspect Ratio**: 16:9 landscape, not too wide or narrow
+- **Gradient Effects**: Soft gradients for depth and layering
 
-### 2. 结构要求（多层次详细描述）
-- **水平三阶段布局**：从左到右分为三个主要阶段（输入→处理→输出）
-- **粗壮数据流箭头**：使用粗壮的箭头连接各阶段，箭头方向清晰
-- **子模块细分**：每个主要阶段内包含多个子模块，用虚线框或浅色背景区分
-- **输入/输出标注**：明确标注数据输入和结果输出
-- **反馈回路**：如有迭代或反馈机制，用虚线箭头表示
+### 2. Structure Requirements (Multi-level Detailed Description)
+- **Horizontal Three-Stage Layout**: Left to right (Input → Processing → Output)
+- **Thick Data Flow Arrows**: Clear directional arrows connecting stages
+- **Sub-module Breakdown**: Multiple sub-modules within each stage, separated by dashed lines or light backgrounds
+- **Input/Output Labels**: Clearly mark data input and result output
+- **Feedback Loops**: Use dashed arrows for iterative or feedback mechanisms
 
-### 3. 内容要求（极度详细）
-- **所有文字标注必须使用简体中文**
-- **技术细节完整**：
-  - 具体的算法名称（如：ResNet-50、Transformer、YOLOv8等）
-  - 网络架构细节（如：卷积层、池化层、全连接层的配置）
-  - 参数设置（如：学习率0.001、批量大小32、迭代次数100等）
-  - 设备型号和规格（如：NVIDIA RTX 4090、Intel i9-13900K等）
-- **变量和符号标注**：
-  - 数学符号使用LaTeX风格（如：$\\mathbf{x}$、$\\mathcal{L}$、$\\nabla$）
-  - 向量/矩阵用粗体表示
-  - 损失函数、优化器明确标注
-- **关键技术创新点**：用星标或特殊图标标注创新点
-- **数据维度标注**：标注张量形状（如：[B, C, H, W]）
+### 3. Content Requirements (Extremely Detailed)
+- **All text annotations must be in Simplified Chinese**
+- **Complete Technical Details**:
+  - Specific algorithm names (e.g., ResNet-50, Transformer, YOLOv8)
+  - Network architecture details (e.g., convolutional layers, pooling layers, fully connected layers)
+  - Parameter settings (e.g., learning rate 0.001, batch size 32, iterations 100)
+  - Equipment specifications (e.g., NVIDIA RTX 4090, Intel i9-13900K)
+- **Variables and Symbols**:
+  - LaTeX-style mathematical notation (e.g., $\mathbf{x}$, $\mathcal{L}$, $\nabla$)
+  - Bold for vectors/matrices
+  - Loss functions and optimizers clearly labeled
+- **Key Innovations**: Mark with star icons or special symbols
+- **Data Dimensions**: Tensor shapes (e.g., [B, C, H, W])
 
-### 4. 视觉元素（丰富多样）
-- **模型架构图**：
-  - 卷积块：用堆叠的矩形表示，标注卷积核大小（如：3×3 Conv）
-  - 特征提取器：用梯形或特殊形状表示
-  - 注意力机制：用放大镜图标或特殊符号表示
-  - 残差连接：用跳跃箭头表示
-- **数据流可视化**：
-  - 输入数据：用图像图标表示（如：相机图标表示图像输入）
-  - 特征图：用热力图样式的小图表示
-  - 输出结果：用图表或检测框表示
-- **图标系统**：
-  - 传感器：使用传感器图标
-  - 数据库：使用圆柱形数据库图标
-  - 算法模块：使用齿轮或大脑图标
-  - 计算单元：使用CPU/GPU图标
-- **注释框**：用虚线框标注关键技术细节
+### 4. Visual Elements (Rich and Diverse)
+- **Model Architecture Diagrams**:
+  - Convolutional blocks: Stacked rectangles with kernel size (e.g., 3×3 Conv)
+  - Feature extractors: Trapezoidal or special shapes
+  - Attention mechanisms: Magnifying glass icons or special symbols
+  - Residual connections: Skip arrows
+- **Data Flow Visualization**:
+  - Input data: Image icons (e.g., camera icon for image input)
+  - Feature maps: Heatmap-style thumbnails
+  - Output results: Charts or detection boxes
+- **Icon System**:
+  - Sensors: Sensor icons
+  - Databases: Cylindrical database icons
+  - Algorithm modules: Gear or brain icons
+  - Computing units: CPU/GPU icons
+- **Annotation Boxes**: Dashed boxes for key technical details
 
-### 5. 配色方案（专业协调）
-- **背景色**：浅灰色或白色背景
-- **阶段区分色**：
-  - 数据预处理：淡蓝色 (#E3F2FD)
-  - 特征提取：淡黄色 (#FFF9C4)
-  - 模型训练：淡绿色 (#E8F5E9)
-  - 推理/输出：淡紫色 (#F3E5F5)
-- **文字颜色**：深灰色或黑色，确保可读性
-- **强调色**：使用醒目的颜色标注关键信息（如：红色表示重要参数）
+### 5. Color Scheme (Professional and Coordinated)
+- **Background**: Light gray or white
+- **Stage Differentiation Colors**:
+  - Data preprocessing: Light blue (#E3F2FD)
+  - Feature extraction: Light yellow (#FFF9C4)
+  - Model training: Light green (#E8F5E9)
+  - Inference/Output: Light purple (#F3E5F5)
+- **Text Color**: Dark gray or black for readability
+- **Accent Colors**: Use eye-catching colors for key information (e.g., red for important parameters)
 
-### 6. 输出格式（严格遵循）
-请直接输出一段完整的英文Prompt（因为大多数AI图像生成工具对英文支持更好），格式如下：
+### 6. Output Format (Strictly Follow)
+Directly output a complete English prompt (as most AI image generation tools have better English support), in the following format:
 
 \`\`\`
 Prompt for Professional Scientific Illustration AI:
 
 Create a high-resolution, professional academic methodological flowchart diagram, strictly following the aesthetic style of a top-tier IEEE journal paper (similar to the reference image style with rounded rectangular stages and pastel background colors). The overall aspect ratio should be moderate (e.g., 16:9 landscape), not overly wide. The color palette must be aesthetically pleasing, using soft pastels (blues, oranges/yellows, greens) to differentiate stages. Crucially, all text annotations within the diagram must be in Simplified Chinese characters, accurately reflecting the technical details provided below. Pay close attention to every technical detail mentioned.
 
-[根据实验方法的具体内容，详细描述：
-- 整体布局和风格
-- 每个阶段的具体内容（包括所有技术细节、参数、变量）
-- 模型架构的可视化表示（卷积块、特征提取器等）
-- 箭头和数据流向
-- 颜色方案
-- 文字标注（中文）
-- 技术细节和数学符号]
+[Based on the specific content of the experimental methods, describe in detail:
+- Overall layout and style
+- Specific content of each stage (including all technical details, parameters, variables)
+- Visual representation of model architecture (convolutional blocks, feature extractors, etc.)
+- Arrows and data flow
+- Color scheme
+- Text annotations (in Chinese)
+- Technical details and mathematical symbols]
 
 Style Notes: Ensure clean lines, professional soft gradients within the icons and boxes, and clear, legible Chinese text suitable for academic publication. The overall feel should be advanced technology integrated with complex system engineering.
 \`\`\`
 
-## 实验方法：
+## Experimental Methods:
 ${methodsToUse}
 
-请生成极其详细、专业的流程图提示词，确保包含所有技术细节、模型架构、变量符号和可视化元素：`;
+Please generate an extremely detailed and professional flowchart prompt, ensuring all technical details, model architectures, variable symbols, and visual elements are included:`;
 
       methodPrompt = await this.callLLM(promptGenPrompt, '');
     }
@@ -1006,8 +1006,7 @@ ${methodsToUse}
     // 结论与局限
     output += `## 结论与局限\n\n`;
     output += `### 核心结论\n`;
-    output += `${conclusions.conclusion || '原文未提供结论'}\n\n`;
-    output += `### 中文翻译\n${conclusions.conclusionZh || '译文由分析生成'}\n\n`;
+    output += `${conclusions.conclusionZh || '译文由分析生成'}\n\n`;
     
     output += `### 局限性\n`;
     output += `${conclusions.limitations || '作者未明确讨论局限性'}\n\n`;
