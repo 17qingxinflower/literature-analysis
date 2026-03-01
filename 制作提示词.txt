@@ -1,0 +1,70 @@
+Develop a comprehensive literature analysis tool with the following specifications:
+
+1. **Core Functionality**:
+   - Implement a user interface allowing upload of two file types:
+     - Academic literature documents (support common formats: PDF, DOCX, TXT)
+     - Image files for method flow diagram prompt generation
+   - Create a backend processing system that extracts and analyzes literature content with strict adherence to the following principles:
+     - **Absolute Factual Accuracy**: All statements must be directly supported by原文 content without inference, supplementation, or interpretation of unstated information
+     - **Uncertainty Disclosure**: Explicitly mark "原文未提供" (not provided in original text) for any missing information categories (e.g., author affiliations, experimental parameters) instead of leaving blank or guessing
+     - **Type-Adaptive Processing**: Dynamically adjust output structure based on literature type (experimental research/theoretical derivation/review) to avoid forced application of inappropriate modules
+
+2. **Output Structure Requirements (Intelligently Adapted by Literature Type)**:
+   - **Basic Information (Mandatory)**:
+     - **Title**:
+       - Original title (preserving original language)
+       - Chinese translation (with "译文由分析生成"注明 if no official translation exists)
+     - **Keywords**:
+       - Original keywords (listed individually with Chinese translations)
+       - "原文未标注关键词" if no explicit keywords provided
+     - **Source Information**:
+       - Publication year, journal/conference name, volume/issue/page numbers
+       - First author and affiliation (only if explicitly provided in original text; otherwise "原文未提供单位信息")
+   
+   - **Content Analysis (Branched by Literature Type)**:
+     - **Experimental Papers**:
+       - **Research Background and Problems**:
+         - Current field status and gaps in previous research (citing original text with key sentence locations e.g., "第2页第3段")
+         - Specific problems addressed in this paper
+       - **Methods and Materials**:
+         - Raw materials/datasets: names, specifications, sources (only items explicitly described in original text)
+         - Experimental/simulation methods: procedures, parameters, equipment (preserving specific values without generalizations), with simultaneous generation of AI-understandable prompts combining methodological descriptions and technical parameters for image generation
+         - Characterization techniques: purpose of each technique + key data from original text (e.g., "XRD显示晶粒尺寸25.3 nm（图3）")
+       - **Results and Findings**:
+         - Objective presentation of experimental phenomena and data (prioritizing original figure numbers and values)
+         - Transcription of original conclusion statements without causal explanations
+     
+     - **Theoretical/Review Papers**:
+       - **Theoretical Framework/Review Scope**:
+         - Core theoretical models or time/topic范围 covered in review
+         - Analytical dimensions or classification systems (e.g., "按三类机制综述：A、B、C")
+       - **Main Arguments/Findings**:
+         - Hierarchical presentation of core观点 following original text logic (with chapter locations)
+         - Key argument chains or evidence (e.g., "基于Smith 2020与Lee 2022的矛盾，提出新解释")
+   
+   - **Conclusions and Limitations (Mandatory)**:
+     - **Core Conclusions**:
+       - Direct quotation of 2-3 most comprehensive original sentences from conclusion section (with paragraph locations)
+       - Accurate Chinese translations without added/deleted modifiers
+     - **Limitations**:
+       - Extraction only of author-self-declared limitations (e.g., "样本量较小" "未考虑温度影响")
+       - "作者未明确讨论局限性" if not mentioned in original text
+
+3. **Quality Assurance Mechanisms**:
+   - Pre-output self-inspection: Verify "whether each statement can be located in original text"
+   - For vague expressions (e.g., "显著提高"), must关联具体数据 (e.g., "效率从68%提升至82%")
+   - Use Markdown hierarchical headings with consistent citation format for data/figures: `（图2）`, `（表1）`, `（p.5）`
+   - Maintain objective academic tone throughout; prohibit subjective expressions like "我认为" or "值得注意的是"
+
+4. **Source Code Acquisition and Analysis**:
+   - Implement functionality to retrieve literature source code when available
+   - Store acquired code in designated project folder with integrity checks
+   - Conduct comparative analysis between code and literature content
+   - Generate comprehensive code analysis report
+
+5. **Technical Requirements**:
+   - Frontend: Framework-agnostic but must feature an aesthetically pleasing, intuitive user interface with responsive design
+   - Backend: Implement robust document parsing, natural language processing, and content extraction capabilities
+   - Overall: Ensure processing accuracy, user experience, and visual presentation quality as primary development priorities
+
+The tool should process user-provided literature strictly according to these specifications while maintaining an attractive and user-friendly interface.

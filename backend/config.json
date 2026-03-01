@@ -1,0 +1,6 @@
+{
+  "apiKey": "sk-593b8e340958e9c8269ff7a593bacbc4",
+  "baseUrl": "https://apis.iflow.cn/v1",
+  "model": "deepseek-v3.2",
+  "visionModel": "glm-4.6"
+}
