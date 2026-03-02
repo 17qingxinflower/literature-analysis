@@ -10,6 +10,8 @@ class LLMAnalyzer {
     this.currentApiKey = null;
     this.currentBaseUrl = null;
     this.currentModel = null;
+    this.currentImageApiKey = null;
+    this.currentImageBaseModel = null;
   }
 
   setConfig(apiKey, baseUrl, model) {
@@ -18,11 +20,24 @@ class LLMAnalyzer {
     this.currentModel = model;
   }
 
+  setImageConfig(apiKey, model) {
+    this.currentImageApiKey = apiKey;
+    this.currentImageBaseModel = model;
+  }
+
   getConfig() {
     return {
       apiKey: this.currentApiKey || process.env.IFLOW_API_KEY || '',
       baseUrl: this.currentBaseUrl || process.env.IFLOW_BASE_URL || 'https://apis.iflow.cn/v1',
       model: this.currentModel || process.env.IFLOW_MODEL || 'deepseek-v3.2'
+    };
+  }
+
+  getImageConfig() {
+    return {
+      apiKey: this.currentImageApiKey || process.env.QINIU_API_KEY || '',
+      baseUrl: 'https://api.qnaigc.com/v1',
+      model: this.currentImageBaseModel || process.env.QINIU_IMAGE_MODEL || 'gemini-2.5-flash-image'
     };
   }
 
@@ -509,6 +524,8 @@ ${this.currentImageInfo.map(img => `图片${img.id}（第${img.page}页，文件
 
     // 第四步：生成方法流程图提示词（全英文）
     let methodPrompt = '';
+    let hasMethodPrompt = false;
+    
     if (contentAnalysis.type === 'experimental' && contentAnalysis.content && contentAnalysis.content.methods) {
       const methodsToUse = pdfImageAnalysis ? 
         `[Method Description]\n${contentAnalysis.content.methods}\n\n[PDF Image Reference]\n${pdfImageAnalysis}` : 
@@ -606,15 +623,42 @@ ${methodsToUse}
 Please generate an extremely detailed and professional flowchart prompt, ensuring all technical details, model architectures, variable symbols, and visual elements are included:`;
 
       methodPrompt = await this.callLLM(promptGenPrompt, '');
+      hasMethodPrompt = true;
+    } else {
+      // 非实验类型或没有方法部分，生成通用示意图提示词
+      const genericPrompt = `You are a professional scientific diagram designer.
+
+Based on the research content below, generate a **general scientific conceptual diagram or framework illustration prompt** suitable for academic publications.
+
+## Requirements:
+- Style: Professional academic illustration (IEEE/Nature/Science journal style)
+- Format: 16:9 landscape, rounded rectangles, soft pastel colors
+- Text: All annotations in Simplified Chinese
+- Content: Create a conceptual framework or system architecture diagram based on the research topic
+
+## Research Content:
+Title: ${basicInfo.title || 'N/A'}
+Abstract: ${contentAnalysis.content?.abstract || 'N/A'}
+Keywords: ${Array.isArray(basicInfo.keywords) ? basicInfo.keywords.join(', ') : (basicInfo.keywords || 'N/A')}
+
+Please generate a professional prompt for creating a scientific conceptual diagram:`;
+
+      methodPrompt = await this.callLLM(genericPrompt, '');
+      hasMethodPrompt = false;  // 标记为通用提示词，不是基于具体方法的
     }
 
     // 生成最终报告
-    const report = this.generateReport(basicInfo, contentAnalysis, conclusions, methodPrompt, pdfImageAnalysis, sourceCodeInfo);
+    const report = this.generateReport(basicInfo, contentAnalysis, conclusions, null, pdfImageAnalysis, sourceCodeInfo);
     
     // 清理临时数据
     this.currentImageInfo = null;
     
-    return report;
+    // 返回包含报告和提示词的对象
+    return {
+      report: report,
+      methodPrompt: methodPrompt,
+      hasMethodPrompt: hasMethodPrompt  // 新增字段，标记是否有具体方法
+    };
   }
   
   // 调用视觉模型分析图片
@@ -899,6 +943,90 @@ Please generate an extremely detailed and professional flowchart prompt, ensurin
     console.log('源码下载完成');
   }
 
+  // 文生图 - 生成流程图
+  async generateFlowchart(prompt, model, apiKey) {
+    const config = {
+      apiKey: apiKey || this.currentImageApiKey || process.env.QINIU_API_KEY || '',
+      baseUrl: 'https://api.qnaigc.com/v1',
+      model: model || this.currentImageBaseModel || process.env.QINIU_IMAGE_MODEL || 'gemini-2.5-flash-image'
+    };
+
+    console.log('开始生成流程图...');
+    console.log('API Key:', config.apiKey ? config.apiKey.substring(0, 10) + '...' : 'empty');
+    console.log('模型:', config.model);
+    
+    if (!config.apiKey) {
+      throw new Error('请先配置七牛云 API Key');
+    }
+
+    try {
+      // 根据模型类型构建不同的请求体
+      const isKlingModel = config.model.startsWith('kling-');
+      const isGemini3Pro = config.model === 'gemini-3.0-pro-image-preview';
+      
+      const requestBody = {
+        model: config.model,
+        prompt: prompt,
+        n: 1
+      };
+
+      // Gemini 模型使用 image_config 参数
+      if (!isKlingModel) {
+        const imageConfig = {
+          aspect_ratio: '16:9'
+        };
+        
+        // 只有 gemini-3.0-pro-image-preview 支持 image_size 参数
+        if (isGemini3Pro) {
+          imageConfig.image_size = '2K';
+        }
+        
+        requestBody.image_config = imageConfig;
+      } else {
+        // Kling 模型使用 aspect_ratio 参数（直接放在根级别）
+        requestBody.aspect_ratio = '16:9';
+      }
+
+      console.log('请求体:', JSON.stringify(requestBody));
+      
+      const response = await axios.post(`${config.baseUrl}/images/generations`, requestBody, {
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${config.apiKey}`
+        },
+        timeout: 120000,
+        retry: 3,
+        retryDelay: 2000
+      });
+
+      const data = response.data;
+      console.log('文生图 API 响应:', JSON.stringify(data).substring(0, 500));
+
+      if (data.data && data.data[0] && data.data[0].b64_json) {
+        return {
+          success: true,
+          imageData: data.data[0].b64_json,
+          model: config.model
+        };
+      } else if (data.data && data.data[0] && data.data[0].url) {
+        return {
+          success: true,
+          imageUrl: data.data[0].url,
+          model: config.model
+        };
+      } else {
+        throw new Error('文生图 API 返回格式异常');
+      }
+    } catch (error) {
+      console.error('文生图失败:', error);
+      if (error.response) {
+        console.error('响应状态:', error.response.status);
+        console.error('响应数据:', JSON.stringify(error.response.data).substring(0, 500));
+      }
+      throw error;
+    }
+  }
+
   // 生成最终报告
   generateReport(basicInfo, contentAnalysis, conclusions, methodPrompt, pdfImageAnalysis, sourceCodeInfo) {
     let output = `# 文献分析报告\n\n`;
@@ -974,10 +1102,7 @@ Please generate an extremely detailed and professional flowchart prompt, ensurin
       output += `#### 原材料/数据集\n${content.materials || '原文未提供材料信息'}\n\n`;
       output += `#### 实验/模拟方法\n${content.methods || '原文未提供实验方法'}\n\n`;
       
-      if (methodPrompt) {
-        output += `### 🔥 方法流程图提示词\n`;
-        output += `\`\`\`\n${methodPrompt}\n\`\`\`\n\n`;
-      }
+      // 注意：方法流程图提示词已移至前端单独显示，不在分析报告中显示
       
       output += `#### 表征技术\n${content.characterization || '原文未提供表征技术'}\n\n`;
       

@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
-import { Button, message, Select, Space, Input, Modal, Alert, Spin } from 'antd';
+import { Button, message, Select, Space, Input, Modal, Alert, Spin, Tooltip } from 'antd';
 import axios from 'axios';
-import { FileTextOutlined, PictureOutlined, RobotOutlined, KeyOutlined, SettingOutlined, DownloadOutlined } from '@ant-design/icons';
+import { FileTextOutlined, PictureOutlined, RobotOutlined, KeyOutlined, SettingOutlined, DownloadOutlined, CopyOutlined, LinkOutlined, ZoomInOutlined } from '@ant-design/icons';
 import { motion, AnimatePresence } from 'framer-motion';
 import './flowstyle.css';
 
@@ -42,10 +42,22 @@ const models = [
   { value: 'hunyuan-turbo', label: 'Hunyuan Turbo (腾讯)' },
 ];
 
+const imageModels = [
+  { value: 'gemini-2.5-flash-image', label: 'Gemini 2.5 Flash Image (Nano Banana)' },
+  { value: 'gemini-3.0-pro-image-preview', label: 'Gemini 3.0 Pro Image Preview (🍌 Nano Banana Pro)' },
+  { value: 'kling-v1', label: 'Kling V1' },
+  { value: 'kling-v1-5', label: 'Kling V1.5' },
+  { value: 'kling-v2', label: 'Kling V2' },
+  { value: 'kling-v2-new', label: 'Kling V2 New' },
+  { value: 'kling-v2-1', label: 'Kling V2.1' },
+];
+
 function App() {
   // 从 localStorage 读取配置
   const savedApiKey = localStorage.getItem('literature_apiKey');
   const savedBaseUrl = localStorage.getItem('literature_baseUrl');
+  const savedImageApiKey = localStorage.getItem('image_apiKey');
+  const savedImageModel = localStorage.getItem('image_model');
   
   const [literatureFile, setLiteratureFile] = useState(null);
   const [imageFile, setImageFile] = useState(null);
@@ -59,22 +71,47 @@ function App() {
   const [literatureDragOver, setLiteratureDragOver] = useState(false);
   const [imageDragOver, setImageDragOver] = useState(false);
   const [analysisComplete, setAnalysisComplete] = useState(false);
+  const [methodPrompt, setMethodPrompt] = useState('');
+  const [hasMethodPrompt, setHasMethodPrompt] = useState(false);
+  const [selectedImageModel, setSelectedImageModel] = useState(savedImageModel || 'gemini-2.5-flash-image');
+  const [imageApiKey, setImageApiKey] = useState(savedImageApiKey || '');
+  const [generatingImage, setGeneratingImage] = useState(false);
+  const [generatedImage, setGeneratedImage] = useState(null);
+  const [previewVisible, setPreviewVisible] = useState(false);
 
   const handleLiteratureFile = (file) => {
+    // 如果已经分析完成，提示用户点击再次上传按钮
+    if (analysisComplete) {
+      message.info({
+        content: '当前分析已完成，请点击"再次上传"按钮开始新的分析',
+        duration: 3,
+      });
+      return;
+    }
+    
     if (file && (file.type === 'application/pdf' || file.type.startsWith('image/') || file.name.endsWith('.pdf') || file.name.endsWith('.docx') || file.name.endsWith('.txt'))) {
       setLiteratureFile(file);
-      message.success(`已选择：${file.name}`);
+      message.success('文献上传成功');
     } else {
-      message.error('不支持的文件格式，请上传 PDF、DOCX 或 TXT 文件');
+      message.error('请上传 PDF 格式的文献文件');
     }
   };
 
   const handleImageFile = (file) => {
+    // 如果已经分析完成，提示用户点击再次上传按钮
+    if (analysisComplete) {
+      message.info({
+        content: '当前分析已完成，请点击"再次上传"按钮开始新的分析',
+        duration: 3,
+      });
+      return;
+    }
+    
     if (file && (file.type.startsWith('image/') || file.name.endsWith('.jpg') || file.name.endsWith('.png') || file.name.endsWith('.jpeg'))) {
       setImageFile(file);
-      message.success(`已选择：${file.name}`);
+      message.success('图片上传成功');
     } else {
-      message.error('不支持的文件格式，请上传图片文件');
+      message.error('请上传图片或 PDF 文件');
     }
   };
 
@@ -125,9 +162,24 @@ function App() {
           'Content-Type': 'multipart/form-data',
         },
       });
-      setResult(response.data);
+      
+      // 后端返回的是 { report: string, methodPrompt: string, hasMethodPrompt: boolean }
+      setResult(response.data.report);
       setAnalysisComplete(true);
-      message.success('分析成功');
+      
+      // 提取方法流程图提示词
+      if (response.data.methodPrompt) {
+        setMethodPrompt(response.data.methodPrompt);
+        setHasMethodPrompt(response.data.hasMethodPrompt || false);
+        
+        if (response.data.hasMethodPrompt) {
+          message.success('分析成功！已提取流程图提示词');
+        } else {
+          message.success('分析成功！已生成通用示意图提示词');
+        }
+      } else {
+        message.success('分析成功');
+      }
     } catch (err) {
       setError(err.response?.data?.error || '分析失败，请重试');
       message.error('分析失败');
@@ -143,6 +195,8 @@ function App() {
     setResult(null);
     setError(null);
     setAnalysisComplete(false);
+    setMethodPrompt('');
+    setGeneratedImage(null);
     
     // 清空 input 的 value
     const literatureInput = document.getElementById('literature-upload');
@@ -151,6 +205,74 @@ function App() {
     if (imageInput) imageInput.value = '';
     
     message.success('已重置，可以继续上传新文件');
+  };
+
+  const handleGenerateFlowchart = async () => {
+    if (!methodPrompt) {
+      message.error('请先分析方法以获取流程图提示词');
+      return;
+    }
+    
+    if (!imageApiKey) {
+      message.error('请先配置七牛云 API Key');
+      setSettingsVisible(true);
+      return;
+    }
+    
+    setGeneratingImage(true);
+    setGeneratedImage(null);
+    
+    const formData = new FormData();
+    formData.append('prompt', methodPrompt);
+    formData.append('model', selectedImageModel);
+    formData.append('apiKey', imageApiKey);
+    
+    try {
+      const apiUrl = process.env.REACT_APP_API_URL || 'http://localhost:3001';
+      const response = await axios.post(`${apiUrl}/generate-flowchart`, formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data',
+        },
+      });
+      
+      if (response.data.success) {
+        if (response.data.imageData) {
+          setGeneratedImage(`data:image/png;base64,${response.data.imageData}`);
+        } else if (response.data.imageUrl) {
+          setGeneratedImage(response.data.imageUrl);
+        }
+        message.success('流程图生成成功！');
+      } else {
+        throw new Error('生成失败');
+      }
+    } catch (err) {
+      message.error('生成失败：' + (err.response?.data?.error || err.message));
+      console.error(err);
+    } finally {
+      setGeneratingImage(false);
+    }
+  };
+
+  const handleCopyPrompt = () => {
+    if (!methodPrompt) {
+      message.error('没有可复制的提示词');
+      return;
+    }
+    
+    navigator.clipboard.writeText(methodPrompt).then(() => {
+      message.success('提示词已复制到剪贴板！');
+    }).catch((err) => {
+      message.error('复制失败，请手动复制');
+      console.error('复制失败:', err);
+    });
+  };
+
+  const handlePreviewImage = () => {
+    if (!generatedImage) {
+      message.error('没有可预览的图片');
+      return;
+    }
+    setPreviewVisible(true);
   };
 
   const handleDownload = () => {
@@ -430,37 +552,208 @@ function App() {
       
       <AnimatePresence>
         {result && (
-          <motion.div
-            className="result-section"
-            initial={{ opacity: 0, y: 30 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -30 }}
-            transition={{ duration: 0.6 }}
-          >
-            <div className="result-card">
-              <div className="result-header">
-                <h2 className="result-title">分析报告</h2>
-                <Button 
-                  type="primary" 
-                  icon={<DownloadOutlined />}
-                  onClick={handleDownload}
-                  className="download-button-inline"
+          <div className="results-container">
+            <motion.div
+              className="result-section"
+              initial={{ opacity: 0, x: -30 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: -30 }}
+              transition={{ duration: 0.6 }}
+            >
+              <div className="result-card">
+                <div className="result-header">
+                  <h2 className="result-title">分析报告</h2>
+                  <Button 
+                    type="primary" 
+                    icon={<DownloadOutlined />}
+                    onClick={handleDownload}
+                    className="download-button-inline"
+                  >
+                    下载报告
+                  </Button>
+                </div>
+                <motion.div
+                  className="result-content"
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  transition={{ duration: 0.6, delay: 0.2 }}
                 >
-                  下载报告
-                </Button>
+                  {renderMarkdown(result)}
+                </motion.div>
               </div>
-              <motion.div
-                className="result-content"
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                transition={{ duration: 0.6, delay: 0.2 }}
-              >
-                {renderMarkdown(result)}
-              </motion.div>
-            </div>
-          </motion.div>
+            </motion.div>
+            
+            <motion.div
+              className="result-section"
+              initial={{ opacity: 0, x: 30 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: 30 }}
+              transition={{ duration: 0.6, delay: 0.2 }}
+            >
+              <div className="result-card">
+                <div className="result-header">
+                  <h2 className="result-title">
+                    🎨 {hasMethodPrompt ? '方法流程图提示词' : '通用示意图提示词'}
+                  </h2>
+                  <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
+                    {!hasMethodPrompt && (
+                      <Tooltip title="该文献没有具体实验方法，这是根据研究内容生成的通用示意图提示词">
+                        <span style={{ fontSize: '12px', color: '#faad14', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                          ⚠️ 通用提示词
+                        </span>
+                      </Tooltip>
+                    )}
+                    <Tooltip title="建议您将提示词复制到生图模型官网进行生图，效果会更好哦">
+                      <span style={{ fontSize: '13px', color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        <LinkOutlined />
+                        推荐：
+                        <a href="https://www.doubao.com/chat/" target="_blank" rel="noopener noreferrer" style={{ color: 'var(--primary-color)', textDecoration: 'none' }}>
+                          豆包
+                        </a>
+                        <span style={{ margin: '0 4px' }}>、</span>
+                        <a href="https://aistudio.google.com/" target="_blank" rel="noopener noreferrer" style={{ color: 'var(--primary-color)', textDecoration: 'none' }}>
+                          Gemini
+                        </a>
+                        <span style={{ margin: '0 4px' }}>等</span>
+                      </span>
+                    </Tooltip>
+                  </div>
+                </div>
+                <div className="prompt-section">
+                  <div className="prompt-controls">
+                    <div className="model-selector">
+                      <span className="model-label">选择图像模型：</span>
+                      <Select 
+                        value={selectedImageModel} 
+                        onChange={setSelectedImageModel} 
+                        className="image-model-select"
+                        disabled={generatingImage}
+                        style={{ width: '100%' }}
+                      >
+                        {imageModels.map(model => (
+                          <Option key={model.value} value={model.value}>
+                            {model.label}
+                          </Option>
+                        ))}
+                      </Select>
+                    </div>
+                    <div className="button-group">
+                      <Button 
+                        icon={<CopyOutlined />}
+                        onClick={handleCopyPrompt}
+                        className="copy-button"
+                      >
+                        复制提示词
+                      </Button>
+                      <Button 
+                        type="primary" 
+                        icon={<PictureOutlined />}
+                        onClick={handleGenerateFlowchart}
+                        loading={generatingImage}
+                        className="generate-button"
+                      >
+                        {generatingImage ? '生成中...' : '生成流程图'}
+                      </Button>
+                    </div>
+                  </div>
+                  <div className="prompt-content">
+                    <pre>{methodPrompt}</pre>
+                  </div>
+                  {generatedImage && (
+                    <motion.div
+                      className="generated-image-container"
+                      initial={{ opacity: 0, y: 20 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ duration: 0.5, delay: 0.3 }}
+                    >
+                      <div className="generated-image-header">
+                        <h3 className="generated-image-title">🖼️ 生成的流程图</h3>
+                        <Space>
+                          <Button 
+                            icon={<ZoomInOutlined />}
+                            onClick={handlePreviewImage}
+                            size="small"
+                          >
+                            放大查看
+                          </Button>
+                          <Button 
+                            type="primary" 
+                            icon={<DownloadOutlined />}
+                            onClick={() => {
+                              const link = document.createElement('a');
+                              link.href = generatedImage;
+                              link.download = `流程图_${Date.now()}.png`;
+                              document.body.appendChild(link);
+                              link.click();
+                              document.body.removeChild(link);
+                              message.success('图片下载成功');
+                            }}
+                            size="small"
+                          >
+                            下载图片
+                          </Button>
+                        </Space>
+                      </div>
+                      <motion.img
+                        src={generatedImage}
+                        alt="生成的流程图"
+                        className="generated-image"
+                        initial={{ opacity: 0, scale: 0.95 }}
+                        animate={{ opacity: 1, scale: 1 }}
+                        transition={{ duration: 0.5 }}
+                        onClick={handlePreviewImage}
+                        style={{ cursor: 'pointer' }}
+                      />
+                    </motion.div>
+                  )}
+                </div>
+              </div>
+            </motion.div>
+          </div>
         )}
       </AnimatePresence>
+      
+      {/* 图片预览 Modal */}
+      <Modal
+        open={previewVisible}
+        onCancel={() => setPreviewVisible(false)}
+        footer={null}
+        width={900}
+        centered
+        closeIcon={null}
+        styles={{
+          body: { padding: 0, display: 'flex', justifyContent: 'center', alignItems: 'center' }
+        }}
+      >
+        <div style={{ position: 'relative', width: '100%' }}>
+          <img
+            src={generatedImage}
+            alt="生成的流程图"
+            style={{ width: '100%', height: 'auto', display: 'block' }}
+          />
+          <Button
+            type="text"
+            size="large"
+            onClick={() => setPreviewVisible(false)}
+            style={{
+              position: 'absolute',
+              top: 8,
+              right: 8,
+              background: 'rgba(0, 0, 0, 0.5)',
+              color: 'white',
+              borderRadius: '50%',
+              width: 40,
+              height: 40,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              fontSize: 20
+            }}
+          >
+            ✕
+          </Button>
+        </div>
+      </Modal>
       
       <Modal
         title={
@@ -487,17 +780,19 @@ function App() {
             // 保存到 localStorage
             localStorage.setItem('literature_apiKey', apiKey);
             localStorage.setItem('literature_baseUrl', baseUrl);
+            localStorage.setItem('image_apiKey', imageApiKey);
+            localStorage.setItem('image_model', selectedImageModel);
             message.success('配置已保存');
             setSettingsVisible(false);
           }}>
             保存
           </Button>,
         ]}
-        width={600}
+        width={700}
       >
         <div style={{ padding: '20px 0' }}>
           <Alert
-            message="配置说明"
+            message="分析 API 配置"
             description={
               <div>
                 <p>1. 请访问 <a href="https://platform.iflow.cn" target="_blank" rel="noopener noreferrer">心流开放平台</a> 获取 API Key</p>
@@ -534,8 +829,53 @@ function App() {
             />
           </div>
           
+          <div style={{ marginTop: 30, marginBottom: 20, borderTop: '1px solid #e8e8e8', paddingTop: 20 }}>
+            <Alert
+              message="文生图 API 配置"
+              description={
+                <div>
+                  <p>1. 请访问 <a href="https://portal.qiniu.com/ai/llm" target="_blank" rel="noopener noreferrer">七牛云 AI 大模型</a> 获取 API Key</p>
+                  <p>2. 七牛云 API 支持多种图像生成模型，包括 Gemini 和 Kling 系列</p>
+                  <p>3. 推荐使用 Gemini 2.5 Flash Image 或 Kling V2 模型</p>
+                </div>
+              }
+              type="warning"
+              showIcon
+              style={{ marginBottom: 20 }}
+            />
+            
+            <div style={{ marginBottom: 20 }}>
+              <label style={{ display: 'block', marginBottom: 8, fontWeight: '500' }}>
+                七牛云 API Key *
+              </label>
+              <Password
+                placeholder="请输入七牛云 API Key"
+                value={imageApiKey}
+                onChange={(e) => setImageApiKey(e.target.value)}
+                style={{ width: '100%' }}
+              />
+            </div>
+            
+            <div style={{ marginBottom: 20 }}>
+              <label style={{ display: 'block', marginBottom: 8, fontWeight: '500' }}>
+                默认图像模型
+              </label>
+              <Select 
+                value={selectedImageModel} 
+                onChange={setSelectedImageModel} 
+                style={{ width: '100%' }}
+              >
+                {imageModels.map(model => (
+                  <Option key={model.value} value={model.value}>
+                    {model.label}
+                  </Option>
+                ))}
+              </Select>
+            </div>
+          </div>
+          
           <Alert
-            message="支持的模型"
+            message="支持的文本模型"
             description={
               <div style={{ maxHeight: 200, overflow: 'auto' }}>
                 <p><strong>DeepSeek:</strong> deepseek-v3.2, deepseek-v3, deepseek-r1</p>

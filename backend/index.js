@@ -130,6 +130,8 @@ app.post('/analyze', upload.fields([{ name: 'literature' }, { name: 'image' }, {
     ]);
     
     console.log('=== 分析完成 ===');
+    console.log('分析报告长度:', analysisResult.report ? analysisResult.report.length : 0);
+    console.log('方法提示词长度:', analysisResult.methodPrompt ? analysisResult.methodPrompt.length : 0);
 
     // 存储到缓存（暂时禁用）
     // analysisCache.set(cacheKey, {
@@ -159,6 +161,38 @@ app.post('/analyze', upload.fields([{ name: 'literature' }, { name: 'image' }, {
       } catch (e) {}
     }
     res.status(500).json({ error: error.message || '分析失败，请重试' });
+  }
+});
+
+// 文生图接口 - 生成流程图
+app.post('/generate-flowchart', upload.single('image'), async (req, res) => {
+  try {
+    console.log('################################################');
+    console.log('### API /generate-flowchart 被调用 ###');
+    console.log('################################################');
+    
+    const { prompt, model, apiKey } = req.body;
+    
+    console.log('提示词:', prompt ? prompt.substring(0, 100) + '...' : 'empty');
+    console.log('模型:', model);
+    console.log('API Key 已提供:', apiKey ? '是' : '否');
+    
+    if (!prompt) {
+      return res.status(400).json({ error: '请提供提示词' });
+    }
+    
+    if (!apiKey) {
+      return res.status(400).json({ error: '请提供七牛云 API Key' });
+    }
+    
+    // 调用文生图 API
+    const result = await literatureAnalyzer.generateFlowchart(prompt, model, apiKey);
+    
+    console.log('文生图完成');
+    res.json(result);
+  } catch (error) {
+    console.error('文生图失败:', error);
+    res.status(500).json({ error: error.message || '生成流程图失败，请重试' });
   }
 });
 
